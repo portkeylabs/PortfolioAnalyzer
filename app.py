@@ -10,7 +10,6 @@ import traceback
 from portfolio_analyzer import PortfolioAnalyzer
 from data_processor import DataProcessor
 from stock_data import StockDataFetcher
-from visualizations import PortfolioVisualizer
 
 
 def main():
@@ -60,7 +59,6 @@ def main():
             # Initialize components
             stock_fetcher = StockDataFetcher()
             analyzer = PortfolioAnalyzer(transactions_df, stock_fetcher)
-            visualizer = PortfolioVisualizer()
 
             # Calculate portfolio metrics (without current prices)
             with st.spinner("Calculating portfolio metrics..."):
