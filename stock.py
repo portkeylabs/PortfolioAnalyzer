@@ -12,7 +12,7 @@ NAME_TO_TICKER = {
     "Betashares Asia Technology Tigers Etf": "ASX.ASIA",
     "Betashares Crypto Innovators Etf": "ASX.CRYP",
     "Betashares India Quality Etf": "ASX.IIND",
-    "Blackmores Limited": "ASX.BKL",
+    "Blackmores Ltd": "ASX.BKL",
     "Block Inc (Au)": "ASX.XYZ",
     "Bwx Limited": "ASX.BWX",
     "Commonwealth Bank Of Australia": "ASX.CBA",
@@ -33,6 +33,7 @@ NAME_TO_TICKER = {
     "Vanguard Diversified Growth Index Etf": "ASX.VDGR",
     "Vanguard Msci Index International Shares Etf": "ASX.VGS",
     "Vanguard Total Stock Market Index Fund Etf": "NDQ.VTI",
+    "Vanguard Total Stock Market Index Fund Etf Sh Ae - Vti": "NDQ.VTI",
     "Webjet Ltd": "ASX.WEB",
     "Woodside Energy Group Limited": "ASX.WDS",
 }
