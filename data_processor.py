@@ -4,6 +4,7 @@ from datetime import datetime
 import io
 from typing import Optional
 import streamlit as st
+from stock import NAME_TO_TICKER
 
 class DataProcessor:
     """Handle CSV file processing and data validation"""
@@ -158,12 +159,15 @@ class DataProcessor:
                     if not stock_name:
                         raise ValueError(f"Row {index + 1}: Cannot extract stock name from dividend transaction: {market_name}")
                     
+                    # Map to ticker if available
+                    symbol = NAME_TO_TICKER.get(stock_name, stock_name)
+                    
                     # Handle negative PL Amount for dividend withdrawals
                     if pl_amount < 0:
                         # This is a dividend withdrawal - subtract from dividends
                         standard_transactions.append({
                             'date': text_date,
-                            'symbol': stock_name,
+                            'symbol': symbol,
                             'action': 'Dividend_Withdrawal',
                             'quantity': 1,
                             'price': abs(pl_amount)  # Store as positive but mark as withdrawal
@@ -192,6 +196,9 @@ class DataProcessor:
                     # Stock transaction - parse the format
                     stock_info = self._parse_cons_transaction(market_name, index + 1, pl_amount)
                     
+                    # Map to ticker if available
+                    symbol = NAME_TO_TICKER.get(stock_info['stock_name'], stock_info['stock_name'])
+
                     # Determine if it's a buy or sell based on transaction type
                     action = 'Buy' if transaction_type == 'WITH' else 'Sell'
                     
@@ -217,7 +224,7 @@ class DataProcessor:
                     # Special case: Negative PL Amount with Summary = DIVIDEND (dividend withdrawal)
                     # Extract stock name from available data or use a generic name
                     stock_name = market_name.strip() if market_name.strip() else 'UNKNOWN_STOCK'
-                    
+                    symbol = NAME_TO_TICKER.get(stock_name, stock_name)
                     standard_transactions.append({
                         'date': text_date,
                         'symbol': stock_name,
@@ -392,39 +399,5 @@ class DataProcessor:
         
         return cleaned_df
     
-    def validate_file_format(self, df: pd.DataFrame) -> bool:
-        """Validate if the DataFrame has the expected format"""
-        try:
-            # Check if we have the required columns
-            df_columns = [col.strip().title() for col in df.columns]
-            
-            for required_col in self.required_columns:
-                if required_col not in df_columns:
-                    return False
-            
-            # Check if we have at least one row of data
-            if len(df) < 1:
-                return False
-            
-            return True
-            
-        except Exception:
-            return False
+
     
-    def get_data_summary(self, df: pd.DataFrame) -> dict:
-        """Get summary statistics of the processed data"""
-        if df.empty:
-            return {}
-        
-        summary = {
-            'total_transactions': len(df),
-            'unique_symbols': df['symbol'].nunique(),
-            'date_range': {
-                'start': df['date'].min(),
-                'end': df['date'].max()
-            },
-            'transaction_types': df['action'].value_counts().to_dict(),
-            'symbols': sorted(df['symbol'].unique().tolist())
-        }
-        
-        return summary
