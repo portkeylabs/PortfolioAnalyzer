@@ -160,7 +160,8 @@ class DataProcessor:
                         raise ValueError(f"Row {index + 1}: Cannot extract stock name from dividend transaction: {market_name}")
                     
                     # Map to ticker if available
-                    symbol = NAME_TO_TICKER.get(stock_name, stock_name)
+                    stock_name_title = stock_name.title()
+                    symbol = NAME_TO_TICKER.get(stock_name_title, stock_name_title)
                     
                     # Handle negative PL Amount for dividend withdrawals
                     if pl_amount < 0:
@@ -176,7 +177,7 @@ class DataProcessor:
                         # Regular dividend payment
                         standard_transactions.append({
                             'date': text_date,
-                            'symbol': stock_name,
+                            'symbol': symbol,
                             'action': 'Dividend',
                             'quantity': 1,
                             'price': abs(pl_amount)
@@ -197,14 +198,15 @@ class DataProcessor:
                     stock_info = self._parse_cons_transaction(market_name, index + 1, pl_amount)
                     
                     # Map to ticker if available
-                    symbol = NAME_TO_TICKER.get(stock_info['stock_name'], stock_info['stock_name'])
+                    stock_name_title = stock_info['stock_name'].title()
+                    symbol = NAME_TO_TICKER.get(stock_name_title, stock_name_title)
 
                     # Determine if it's a buy or sell based on transaction type
                     action = 'Buy' if transaction_type == 'WITH' else 'Sell'
                     
                     standard_transactions.append({
                         'date': text_date,
-                        'symbol': stock_info['stock_name'],
+                        'symbol': symbol,
                         'action': action,
                         'quantity': stock_info['quantity'],
                         'price': stock_info['unit_price']
@@ -224,10 +226,11 @@ class DataProcessor:
                     # Special case: Negative PL Amount with Summary = DIVIDEND (dividend withdrawal)
                     # Extract stock name from available data or use a generic name
                     stock_name = market_name.strip() if market_name.strip() else 'UNKNOWN_STOCK'
-                    symbol = NAME_TO_TICKER.get(stock_name, stock_name)
+                    stock_name_title = stock_name.title()
+                    symbol = NAME_TO_TICKER.get(stock_name_title, stock_name_title)
                     standard_transactions.append({
                         'date': text_date,
-                        'symbol': stock_name,
+                        'symbol': symbol,
                         'action': 'Dividend_Withdrawal',
                         'quantity': 1,
                         'price': abs(pl_amount)
