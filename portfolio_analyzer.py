@@ -1,7 +1,9 @@
 import pandas as pd
 import numpy as np
+import time
 from datetime import datetime, date
 from typing import Dict, List, Optional
+from stock import TICKER_MAP
 import yfinance as yf
 
 class PortfolioAnalyzer:
@@ -10,7 +12,12 @@ class PortfolioAnalyzer:
     def __init__(self, transactions_df: pd.DataFrame, stock_fetcher):
         self.transactions_df = transactions_df
         self.stock_fetcher = stock_fetcher
-        
+        # Ensure correct dtypes
+        self.transactions_df['quantity'] = pd.to_numeric(self.transactions_df['quantity'], errors='coerce')
+        self.transactions_df['price'] = pd.to_numeric(self.transactions_df['price'], errors='coerce')
+        self.transactions_df = self.transactions_df.dropna(subset=['quantity', 'price'])
+
+
     def get_unique_symbols(self) -> List[str]:
         """Get unique stock symbols from transactions (excluding non-stock entries)"""
         # Filter out non-stock symbols
@@ -19,6 +26,25 @@ class PortfolioAnalyzer:
         ]
         return stock_transactions['symbol'].unique().tolist()
     
+    def fetch_yf_info_with_retry(self,  ticker, retries=3, delay=3, history_period=None):
+        for attempt in range(retries):
+            try:
+                yf_stock = yf.Ticker(ticker)
+                if history_period:
+                    hist = yf_stock.history(period=history_period)
+                    if hist is not None and not hist.empty:
+                        return hist
+                else:
+                    info = yf_stock.info
+                    if info and not ('code' in info and info['code'] == 'Not Found'):
+                        return info
+            except Exception as e:
+                if attempt < retries - 1:
+                    time.sleep(delay)
+                else:
+                    raise e
+        return None
+         
     def calculate_current_holdings_without_prices(self) -> pd.DataFrame:
         """Calculate current holdings without current market prices"""
         holdings = []
@@ -74,58 +100,99 @@ class PortfolioAnalyzer:
         
         return holdings_df
     
-    def calculate_current_holdings(self, current_prices: Dict[str, float]) -> pd.DataFrame:
-        """Calculate current holdings and their performance"""
+    def calculate_current_holdings(self) -> pd.DataFrame:
+        """Calculate current holdings and their performance using yfinance, using 'Close' for ETFs if 'currentPrice' is unavailable."""
         holdings = []
-        
+        skipped_stocks = []
+
         for symbol in self.get_unique_symbols():
+            ticker = TICKER_MAP.get(symbol, symbol)
+            try:
+                info = self.fetch_yf_info_with_retry(ticker)
+                if not info:
+                    skipped_stocks.append({
+                        "symbol": symbol,
+                        "ticker": ticker,
+                        "reason": "No data found"
+                    })
+                    continue
+
+                current_price = info.get("currentPrice", "N/A")
+                market = info.get("market", "N/A")
+                sector = info.get("sector", "N/A")
+    
+                # If current price is N/A, try to get the latest close price from historical data
+                if current_price == "N/A":
+                    try:
+                        hist = self.fetch_yf_info_with_retry(ticker, history_period="1d")
+                        if hist is not None and not hist.empty and "Close" in hist.columns:
+                            current_price = hist["Close"].iloc[-1]
+                    except Exception:
+                        current_price = "N/A"
+    
+                # If still N/A, check market and sector, and skip if both are N/A
+                if current_price == "N/A" and (market == "N/A" or sector == "N/A"):
+                    skipped_stocks.append({
+                        "symbol": symbol,
+                        "ticker": ticker,
+                        "reason": f"Missing info: price={current_price}, market={market}, sector={sector}"
+                    })
+                    continue
+                
+            except Exception as e:
+                print(f"Warning: Could not fetch data for {symbol} ({ticker}): {str(e)}")
+                skipped_stocks.append({
+                    "symbol": symbol,
+                    "ticker": ticker,
+                    "reason": f"Error fetching data: {str(e)}"
+                })
+                continue
+            
             symbol_transactions = self.transactions_df[
                 (self.transactions_df['symbol'] == symbol) & 
                 (self.transactions_df['action'].isin(['Buy', 'Sell']))
             ].copy()
-            
+    
             if symbol_transactions.empty:
                 continue
-                
-            # Calculate position
-            total_bought = 0
-            total_cost = 0
-            total_sold = 0
-            total_sold_proceeds = 0
             
-            for _, transaction in symbol_transactions.iterrows():
-                if transaction['action'] == 'Buy':
-                    total_bought += transaction['quantity']
-                    total_cost += transaction['quantity'] * transaction['price']
-                elif transaction['action'] == 'Sell':
-                    total_sold += transaction['quantity']
-                    total_sold_proceeds += transaction['quantity'] * transaction['price']
-            
+            total_bought = float(symbol_transactions[symbol_transactions['action'] == 'Buy']['quantity'].sum())
+            total_cost = float((symbol_transactions[symbol_transactions['action'] == 'Buy']['quantity'] * 
+                          symbol_transactions[symbol_transactions['action'] == 'Buy']['price']).sum())
+            total_sold = float(symbol_transactions[symbol_transactions['action'] == 'Sell']['quantity'].sum())
+    
             current_quantity = total_bought - total_sold
-            
+    
             if current_quantity > 0:
                 avg_cost = (total_cost - (total_sold / total_bought * total_cost)) / current_quantity if total_bought > 0 else 0
-                current_price = current_prices.get(symbol, 0)
                 current_value = current_quantity * current_price
                 gain_loss = current_value - (current_quantity * avg_cost)
                 gain_loss_pct = (gain_loss / (current_quantity * avg_cost)) * 100 if avg_cost > 0 else 0
-                
+    
                 holdings.append({
                     'symbol': symbol,
+                    'ticker': ticker,
                     'quantity': current_quantity,
                     'avg_cost': avg_cost,
                     'current_price': current_price,
                     'current_value': current_value,
                     'gain_loss': gain_loss,
-                    'gain_loss_pct': gain_loss_pct
+                    'gain_loss_pct': gain_loss_pct,
+                    'market': market,
+                    'sector': sector
                 })
-        
+    
         holdings_df = pd.DataFrame(holdings)
-        
         if not holdings_df.empty:
             total_value = holdings_df['current_value'].sum()
             holdings_df['allocation_pct'] = (holdings_df['current_value'] / total_value) * 100
-        
+    
+        # Optionally, print skipped stocks for reporting
+        if skipped_stocks:
+            print("Skipped stocks due to missing info:")
+            for s in skipped_stocks:
+                print(s)
+    
         return holdings_df
     
     def calculate_portfolio_summary_without_prices(self) -> Dict:
@@ -159,7 +226,7 @@ class PortfolioAnalyzer:
     
     def calculate_portfolio_summary(self, current_prices: Dict[str, float]) -> Dict:
         """Calculate overall portfolio summary statistics"""
-        holdings = self.calculate_current_holdings(current_prices)
+        holdings = self.calculate_current_holdings()
         
         # Calculate total invested
         buy_transactions = self.transactions_df[self.transactions_df['action'] == 'Buy']

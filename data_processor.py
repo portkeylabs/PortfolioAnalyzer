@@ -4,7 +4,7 @@ from datetime import datetime
 import io
 from typing import Optional
 import streamlit as st
-from stock import NAME_TO_TICKER
+from stock import TICKER_MAP
 
 class DataProcessor:
     """Handle CSV file processing and data validation"""
@@ -161,7 +161,7 @@ class DataProcessor:
                     
                     # Map to ticker if available
                     stock_name_title = stock_name.title()
-                    symbol = NAME_TO_TICKER.get(stock_name_title, stock_name_title)
+                    symbol = TICKER_MAP.get(stock_name_title, stock_name_title)
                     
                     # Handle negative PL Amount for dividend withdrawals
                     if pl_amount < 0:
@@ -199,7 +199,7 @@ class DataProcessor:
                     
                     # Map to ticker if available
                     stock_name_title = stock_info['stock_name'].title()
-                    symbol = NAME_TO_TICKER.get(stock_name_title, stock_name_title)
+                    symbol = TICKER_MAP.get(stock_name_title, stock_name_title)
 
                     # Determine if it's a buy or sell based on transaction type
                     action = 'Buy' if transaction_type == 'WITH' else 'Sell'
@@ -227,7 +227,7 @@ class DataProcessor:
                     # Extract stock name from available data or use a generic name
                     stock_name = market_name.strip() if market_name.strip() else 'UNKNOWN_STOCK'
                     stock_name_title = stock_name.title()
-                    symbol = NAME_TO_TICKER.get(stock_name_title, stock_name_title)
+                    symbol = TICKER_MAP.get(stock_name_title, stock_name_title)
                     standard_transactions.append({
                         'date': text_date,
                         'symbol': symbol,
